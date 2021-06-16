@@ -1,0 +1,29 @@
+{
+	"name": "pratica-13-boardcamp",
+	"version": "1.0.0",
+	"type": "module",
+	"description": "Sistema de locadora de boardgames, com cadastro de clientes, jogos, categorias e cálculo de aluguel por atraso.",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"start": "npx nodemon ./src/index.js --ext js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mateuskuritza/Projeto-13-Boardcamp.git"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/mateuskuritza/Projeto-13-Boardcamp/issues"
+	},
+	"homepage": "https://github.com/mateuskuritza/Projeto-13-Boardcamp#readme",
+	"dependencies": {
+		"cors": "^2.8.5",
+		"express": "^4.17.1",
+		"joi": "^17.4.0",
+		"nodemon": "^2.0.7",
+		"pg": "^8.6.0"
+	}
+}
