@@ -105,4 +105,35 @@ const newGameSchema = joi.object({
 	category_id: joi.number().required(),
 	price_per_day: joi.number().min(1).required(),
 });
+
 // Games end
+
+// Customers start
+
+app.get("/customers", async (req, res) => {
+	const { cpf } = req.query;
+	const queryConfig = cpf ? `${cpf}%` : "%";
+	try {
+		const customersList = await dbConnect.query(`SELECT * FROM customers WHERE cpf LIKE $1`, [queryConfig]);
+		res.send(customersList.rows);
+	} catch {
+		res.sendStatus(500);
+	}
+});
+
+app.get("/customers/:id", async (req, res) => {
+	const { id } = req.query;
+
+	const customersIdList = await dbConnect.query(`SELECT id FROM customers`);
+	const customersIdListValue = customersIdList.rows.map( c => c.id);
+
+    if(!customersIdListValue.includes(id)){
+        res.sendStatus(404);
+        return
+    }
+
+	const customer = await dbConnect.query(`SELECT * FROM customers WHERE id = $1`, [id]);
+	res.send(customer.rows);
+});
+
+// Customers end
