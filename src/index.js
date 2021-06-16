@@ -122,18 +122,47 @@ app.get("/customers", async (req, res) => {
 });
 
 app.get("/customers/:id", async (req, res) => {
-	const { id } = req.query;
+	const { id } = req.params;
+	try {
+		const customersIdList = await dbConnect.query(`SELECT id FROM customers`);
+		const customersIdListValues = customersIdList.rows.map((c) => c.id);
 
-	const customersIdList = await dbConnect.query(`SELECT id FROM customers`);
-	const customersIdListValue = customersIdList.rows.map( c => c.id);
+		if (!customersIdListValues.includes(parseInt(id))) {
+			res.sendStatus(404);
+			return;
+		}
+		const customer = await dbConnect.query(`SELECT * FROM customers WHERE id = $1`, [id]);
+		res.send(customer.rows);
+	} catch {
+		res.sendStatus(500);
+	}
+});
 
-    if(!customersIdListValue.includes(id)){
-        res.sendStatus(404);
-        return
-    }
+app.post("/customers", async (req, res) => {
+	const newCustomer = req.body;
+	const { name, phone, cpf, birthday } = newCustomer;
 
-	const customer = await dbConnect.query(`SELECT * FROM customers WHERE id = $1`, [id]);
-	res.send(customer.rows);
+	const existingCpfList = await dbConnect.query("SELECT cpf FROM customers");
+	const existingCpfValues = existingCpfList.rows.map((c) => c.cpf);
+
+	if (newCustomerSchema.validate(newCustomer).error !== undefined) {
+		res.sendStatus(400);
+		return;
+	}
+	if (existingCpfValues.includes(cpf)) {
+		res.sendStatus(409);
+		return;
+	}
+
+	dbConnect.query("INSERT INTO customers (name, phone, cpf, birthday) values ($1,$2,$3,$4)", [name, phone, cpf, birthday]);
+	res.sendStatus(201);
+});
+
+const newCustomerSchema = joi.object({
+	name: joi.string().required(),
+	phone: joi.string().min(10).max(11),
+	cpf: joi.string().pattern(/^[0-9]{3}[0-9]{3}[0-9]{3}[0-9]{2}$/),
+	birthday: joi.date().required(),
 });
 
 // Customers end
