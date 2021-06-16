@@ -17,11 +17,15 @@ const dbConnect = new Pool({
 	database: "boardcamp",
 });
 
-// Categories
+// Categories start
 
 app.get("/categories", async (req, res) => {
-	const result = await dbConnect.query("SELECT * FROM categories");
-	res.send(result.rows);
+	try {
+		const result = await dbConnect.query("SELECT * FROM categories");
+		res.send(result.rows);
+	} catch {
+		res.sendStatus(500);
+	}
 });
 
 app.post("/categories", async (req, res) => {
@@ -46,3 +50,19 @@ app.post("/categories", async (req, res) => {
 });
 
 // Categories end
+
+// Games start
+// FALTA DESTACAR O NOME ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+app.get("/games", async (req, res) => {
+	try {
+		const { name } = req.query;
+		const queryConfig = name ? `%${name}%` : "%";
+		const result = await dbConnect.query("SELECT * FROM games WHERE name LIKE $1", [queryConfig]);
+		res.send(result.rows);
+	} catch {
+		res.sendStatus(500);
+	}
+});
+
+// Games end
