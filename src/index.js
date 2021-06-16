@@ -24,4 +24,25 @@ app.get("/categories", async (req, res) => {
 	res.send(result.rows);
 });
 
+app.post("/categories", async (req, res) => {
+	const { name } = req.body;
+	try {
+		const existingCategories = await dbConnect.query("SELECT name FROM categories");
+		if (name === undefined || name.trim() === "") {
+			res.sendStatus(400);
+			return;
+		}
+		existingCategories.rows.forEach((category) => {
+			if (category.name === name) {
+				res.sendStatus(409);
+				return;
+			}
+		});
+		dbConnect.query("INSERT INTO categories (name) values ($1)", [name]);
+		res.sendStatus(201);
+	} catch {
+		res.sendStatus(500);
+	}
+});
+
 // Categories end
