@@ -17,3 +17,11 @@ const dbConnect = new Pool({
 	database: "boardcamp",
 });
 
+// Categories
+
+app.get("/categories", async (req, res) => {
+	const result = await dbConnect.query("SELECT * FROM categories");
+	res.send(result.rows);
+});
+
+// Categories end
