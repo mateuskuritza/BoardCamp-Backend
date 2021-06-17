@@ -67,7 +67,7 @@ app.get("/games", async (req, res) => {
 
 app.post("/games", async (req, res) => {
 	const newGame = req.body;
-	const { name, image, stock_total, category_id, price_per_day } = newGame;
+	const { name, image, stockTotal, categoryId, pricePerDay } = newGame;
 
 	try {
 		const existingCategories = await dbConnect.query("SELECT id FROM categories");
@@ -75,7 +75,7 @@ app.post("/games", async (req, res) => {
 		const existingCategoriesValues = existingCategories.rows.map((category) => category.id);
 		const existingNamesValues = existingNames.rows.map((game) => game.name);
 
-		if (newGameSchema.validate(newGame).error !== undefined || !existingCategoriesValues.includes(category_id)) {
+		if (newGameSchema.validate(newGame).error !== undefined || !existingCategoriesValues.includes(categoryId)) {
 			res.sendStatus(400);
 			return;
 		}
@@ -85,12 +85,12 @@ app.post("/games", async (req, res) => {
 			return;
 		}
 
-		dbConnect.query("INSERT INTO games (name, image, stock_total, category_id, price_per_day) values ($1, $2, $3, $4, $5)", [
+		dbConnect.query(`INSERT INTO games (name, image, "stockTotal", "categoryId", "pricePerDay") values ($1, $2, $3, $4, $5)`, [
 			name,
 			image,
-			stock_total,
-			category_id,
-			price_per_day,
+			stockTotal,
+			categoryId,
+			pricePerDay,
 		]);
 		res.sendStatus(201);
 	} catch {
@@ -101,9 +101,9 @@ app.post("/games", async (req, res) => {
 const newGameSchema = joi.object({
 	name: joi.string().required(),
 	image: joi.string().required(),
-	stock_total: joi.number().min(1).required(),
-	category_id: joi.number().required(),
-	price_per_day: joi.number().min(1).required(),
+	stockTotal: joi.number().min(1).required(),
+	categoryId: joi.number().required(),
+	pricePerDay: joi.number().min(1).required(),
 });
 
 // Games end
@@ -194,3 +194,8 @@ const customerSchema = joi.object({
 });
 
 // Customers end
+
+// Rentals start
+
+
+// Rentals end
