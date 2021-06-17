@@ -1,25 +1,9 @@
-import cors from "cors";
-import pg from "pg";
-import express from "express";
 import joi from "joi";
 import dayjs from "dayjs";
+import dbConnect from "./database/database.js";
+import app from "./serverConfig.js";
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.listen(4000, () => console.log("Server running..."));
-
-const { Pool } = pg;
-const dbConnect = new Pool({
-	user: "bootcamp_role",
-	password: "senha_super_hiper_ultra_secreta_do_role_do_bootcamp",
-	host: "localhost",
-	port: 5432,
-	database: "boardcamp",
-});
-
-// Categories start
-
+// Categories routes start
 app.get("/categories", async (req, res) => {
 	try {
 		const result = await dbConnect.query("SELECT * FROM categories");
@@ -31,35 +15,41 @@ app.get("/categories", async (req, res) => {
 
 app.post("/categories", async (req, res) => {
 	const { name } = req.body;
+
 	try {
-		const existingCategories = await dbConnect.query("SELECT name FROM categories");
-		if (name === undefined || name.trim() === "") {
+		if (name === undefined || typeof name !== "string" || name.trim() === "") {
 			res.sendStatus(400);
 			return;
 		}
-		existingCategories.rows.forEach((category) => {
-			if (category.name === name) {
-				res.sendStatus(409);
-				return;
-			}
-		});
+
+		let existingName = await dbConnect.query("SELECT * FROM categories WHERE name=$1", [name]);
+		existingName = existingName.rows[0] ? existingName.rows[0].name : false;
+		if (existingName) {
+			res.sendStatus(409);
+			return;
+		}
+
 		dbConnect.query("INSERT INTO categories (name) values ($1)", [name]);
 		res.sendStatus(201);
 	} catch {
 		res.sendStatus(500);
 	}
 });
-
 // Categories end
 
-// Games start
-// FALTA DESTACAR O NOME ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+// Games routes start
 app.get("/games", async (req, res) => {
+	const { name } = req.query;
+	const queryConfig = name ? `%${name}%` : "%";
 	try {
-		const { name } = req.query;
-		const queryConfig = name ? `%${name}%` : "%";
-		const result = await dbConnect.query("SELECT * FROM games WHERE name iLIKE $1", [queryConfig]);
+		const result = await dbConnect.query(
+			`
+        SELECT games.*, categories.name AS "categoryName" 
+        FROM games JOIN categories
+        ON games."categoryId" = categories.id
+        WHERE games.name iLIKE $1`,
+			[queryConfig]
+		);
 		res.send(result.rows);
 	} catch {
 		res.sendStatus(500);
@@ -80,7 +70,6 @@ app.post("/games", async (req, res) => {
 			res.sendStatus(400);
 			return;
 		}
-
 		if (existingNamesValues.includes(name)) {
 			res.sendStatus(409);
 			return;
@@ -106,17 +95,14 @@ const newGameSchema = joi.object({
 	categoryId: joi.number().required(),
 	pricePerDay: joi.number().min(1).required(),
 });
-
 // Games end
 
-// Customers start
-
+// Customers routes start
 app.get("/customers", async (req, res) => {
 	const { cpf } = req.query;
 	const queryConfig = cpf ? `${cpf}%` : "%";
 	try {
 		const customersList = await dbConnect.query(`SELECT * FROM customers WHERE cpf LIKE $1`, [queryConfig]);
-
 		const customersListFormated = customersList.rows.map((c) => {
 			const formated = c;
 			formated.birthday = dayjs(formated.birthday).format("YYYY/MM/DD");
@@ -133,11 +119,11 @@ app.get("/customers/:id", async (req, res) => {
 	try {
 		const customersIdList = await dbConnect.query(`SELECT id FROM customers`);
 		const customersIdListValues = customersIdList.rows.map((c) => c.id);
-
 		if (!customersIdListValues.includes(parseInt(id))) {
 			res.sendStatus(404);
 			return;
 		}
+
 		const customer = await dbConnect.query(`SELECT * FROM customers WHERE id = $1`, [id]);
 		res.send(customer.rows);
 	} catch {
@@ -161,6 +147,7 @@ app.post("/customers", async (req, res) => {
 			res.sendStatus(409);
 			return;
 		}
+
 		dbConnect.query("INSERT INTO customers (name, phone, cpf, birthday) values ($1,$2,$3,$4)", [name, phone, cpf, birthday]);
 		res.sendStatus(201);
 	} catch {
@@ -178,15 +165,23 @@ app.put("/customers/:id", async (req, res) => {
 			res.sendStatus(400);
 			return;
 		}
-		await dbConnect.query("DELETE FROM customers WHERE id = $1", [id]);
-
-		const existingCpfList = await dbConnect.query("SELECT cpf FROM customers");
+		/*
+        ???????????????
+        const existingCpfList = await dbConnect.query("SELECT cpf FROM customers");
 		const existingCpfValues = existingCpfList.rows.map((c) => c.cpf);
 		if (existingCpfValues.includes(cpf)) {
 			res.sendStatus(409);
 			return;
 		}
-		dbConnect.query("INSERT INTO customers (name, phone, cpf, birthday) values ($1,$2,$3,$4)", [name, phone, cpf, birthday]);
+        */
+
+		dbConnect.query("UPDATE customers SET name=$1, phone=$2, cpf=$3, birthday=$4 WHERE id=$5", [
+			name,
+			phone,
+			cpf,
+			birthday,
+			id,
+		]);
 		res.sendStatus(200);
 	} catch {
 		res.sendStatus(500);
@@ -199,20 +194,16 @@ const customerSchema = joi.object({
 	cpf: joi.string().pattern(/^[0-9]{3}[0-9]{3}[0-9]{3}[0-9]{2}$/),
 	birthday: joi.date().required(),
 });
-
 // Customers end
 
-// Rentals start
-
+// Rentals routes start
 app.get("/rentals", async (req, res) => {
 	const { customerId, gameId } = req.query;
-	const customerIdConfig = customerId ? `${customerId}` : "%";
-	const gameIdConfig = gameId ? `${gameId}` : "%";
 	let rentalsList;
-
-	if (customerId && gameId) {
-		rentalsList = await dbConnect.query(
-			`
+	try {
+		if (customerId && gameId) {
+			rentalsList = await dbConnect.query(
+				`
         SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
         FROM rentals 
         JOIN customers
@@ -223,13 +214,13 @@ app.get("/rentals", async (req, res) => {
         ON games."categoryId" = categories.id
         WHERE rentals."customerId" = $1 AND rentals."gameId" = $2
         `,
-			[customerIdConfig, gameIdConfig]
-		);
-	}
+				[customerId, gameId]
+			);
+		}
 
-	if (customerId && !gameId) {
-		rentalsList = await dbConnect.query(
-			`
+		if (customerId && !gameId) {
+			rentalsList = await dbConnect.query(
+				`
         SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
         FROM rentals 
         JOIN customers
@@ -240,13 +231,13 @@ app.get("/rentals", async (req, res) => {
         ON games."categoryId" = categories.id
         WHERE rentals."customerId" = $1
         `,
-			[customerIdConfig]
-		);
-	}
+				[customerId]
+			);
+		}
 
-	if (!customerId && gameId) {
-		rentalsList = await dbConnect.query(
-			`
+		if (!customerId && gameId) {
+			rentalsList = await dbConnect.query(
+				`
         SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
         FROM rentals 
         JOIN customers
@@ -257,13 +248,13 @@ app.get("/rentals", async (req, res) => {
         ON games."categoryId" = categories.id
         WHERE rentals."gameId" = $1
         `,
-			[gameIdConfig]
-		);
-	}
+				[gameId]
+			);
+		}
 
-	if (!customerId && !gameId) {
-		rentalsList = await dbConnect.query(
-			`
+		if (!customerId && !gameId) {
+			rentalsList = await dbConnect.query(
+				`
         SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
         FROM rentals 
         JOIN customers
@@ -273,47 +264,50 @@ app.get("/rentals", async (req, res) => {
         JOIN categories
         ON games."categoryId" = categories.id
         `
-		);
+			);
+		}
+
+		const rentalsListFormated = rentalsList.rows.map((rental) => {
+			const {
+				id,
+				customerId,
+				gameId,
+				rentDate,
+				daysRented,
+				returnDate,
+				originalPrice,
+				delayFee,
+				customerName,
+				gameName,
+				categoryId,
+				categoryName,
+			} = rental;
+
+			return {
+				id: id,
+				customerId,
+				gameId,
+				rentDate: dayjs(rentDate).format("YYYY/MM/DD"),
+				daysRented,
+				returnDate: returnDate ? dayjs(returnDate).format("YYYY/MM/DD") : returnDate,
+				originalPrice,
+				delayFee,
+				customer: {
+					id: customerId,
+					name: customerName,
+				},
+				game: {
+					id: gameId,
+					name: gameName,
+					categoryId: categoryId,
+					categoryName: categoryName,
+				},
+			};
+		});
+		res.send(rentalsListFormated);
+	} catch {
+		res.sendStatus(500);
 	}
-
-	const rentalsListFormated = rentalsList.rows.map((rental) => {
-		const {
-			id,
-			customerId,
-			gameId,
-			rentDate,
-			daysRented,
-			returnDate,
-			originalPrice,
-			delayFee,
-			customerName,
-			gameName,
-			categoryId,
-			categoryName,
-		} = rental;
-
-		return {
-			id: id,
-			customerId,
-			gameId,
-			rentDate: dayjs(rentDate).format("YYYY/MM/DD"),
-			daysRented,
-			returnDate: returnDate ? dayjs(returnDate).format("YYYY/MM/DD") : returnDate,
-			originalPrice,
-			delayFee,
-			customer: {
-				id: customerId,
-				name: customerName,
-			},
-			game: {
-				id: gameId,
-				name: gameName,
-				categoryId: categoryId,
-				categoryName: categoryName,
-			},
-		};
-	});
-	res.send(rentalsListFormated);
 });
 
 app.post("/rentals", async (req, res) => {
@@ -328,7 +322,7 @@ app.post("/rentals", async (req, res) => {
 		const rentedGames = await dbConnect.query(`SELECT * FROM rentals WHERE "gameId"=$1`, [gameId]);
 		const rentedGamesQuantity = rentedGames.rows.length;
 		const availableGames = await dbConnect.query(`SELECT "stockTotal" FROM games WHERE id=$1`, [gameId]);
-		const availableGamesQuantity = availableGames.rows[0].stockTotal;
+		const availableGamesQuantity = availableGames.rows[0] !== undefined ? availableGames.rows[0].stockTotal : 0;
 
 		if (!existGameId || !existCustomer || !daysRented >= 1 || rentedGamesQuantity + 1 > availableGamesQuantity) {
 			res.sendStatus(400);
@@ -357,7 +351,6 @@ app.post("/rentals/:id/return", async (req, res) => {
 	try {
 		const rentalQuery = await dbConnect.query(`SELECT * FROM rentals WHERE id=$1`, [id]);
 		const rental = rentalQuery.rows[0];
-
 		if (!rental) {
 			res.sendStatus(404);
 			return;
