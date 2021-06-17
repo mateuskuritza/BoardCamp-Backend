@@ -197,5 +197,42 @@ const customerSchema = joi.object({
 
 // Rentals start
 
+app.get("/rentals", async (req, res) => {
+	const rentalsList = await dbConnect.query("SELECT * FROM rentals ");
+    res.send(rentalsList.rows);
+});
+
+app.post("/rentals", async (req, res) => {
+	const { customerId, gameId, daysRented } = req.body;
+
+	let existGameId = await dbConnect.query("SELECT * FROM games WHERE id=$1", [gameId]);
+	existGameId = existGameId.rows.length > 0;
+	let existCustomer = await dbConnect.query("SELECT * FROM customers WHERE id=$1", [customerId]);
+	existCustomer = existCustomer.rows.length > 0;
+
+	const rentedGames = await dbConnect.query(`SELECT * FROM rentals WHERE "gameId"=$1`, [gameId]);
+	const rentedGamesQuantity = rentedGames.rows.length;
+	const availableGames = await dbConnect.query(`SELECT "stockTotal" FROM games WHERE id=$1`, [gameId]);
+	const availableGamesQuantity = availableGames.rows[0].stockTotal;
+
+	if (!existGameId || !existCustomer || !daysRented >= 1 || rentedGamesQuantity + 1 > availableGamesQuantity) {
+		res.sendStatus(400);
+		return;
+	}
+
+	let pricePerDay = await dbConnect.query(`SELECT "pricePerDay" FROM games WHERE id=$1`, [gameId]);
+	pricePerDay = pricePerDay.rows[0].pricePerDay;
+
+	const originalPrice = daysRented * pricePerDay;
+	const rentDate = new Date();
+
+	await dbConnect.query(
+		`INSERT INTO rentals ("customerId","gameId","daysRented","rentDate","originalPrice","returnDate","delayFee") values ($1,$2,$3,$4,$5,$6,$7)`,
+		[customerId, gameId, daysRented, rentDate, originalPrice, null, null]
+	);
+	res.sendStatus(201);
+});
 
 // Rentals end
+//  fuser -k -n tcp 4000
+// const promise = dbConnect.query(`SELECT rentals, customers FROM rentals INNER JOIN customers ON rentals."customerId"=customers.id`).then( (result) => console.log(result.rows));
