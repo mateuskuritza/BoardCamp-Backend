@@ -6,5 +6,7 @@ CREATE TABLE "rentals" (
   "daysRented" INTEGER NOT NULL,
   "returnDate" DATE,
   "originalPrice" INTEGER NOT NULL,
-  "delayFee" DATE
+  "delayFee" INTEGER
 );
+
+
