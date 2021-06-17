@@ -142,23 +142,51 @@ app.post("/customers", async (req, res) => {
 	const newCustomer = req.body;
 	const { name, phone, cpf, birthday } = newCustomer;
 
-	const existingCpfList = await dbConnect.query("SELECT cpf FROM customers");
-	const existingCpfValues = existingCpfList.rows.map((c) => c.cpf);
+	try {
+		if (customerSchema.validate(newCustomer).error !== undefined) {
+			res.sendStatus(400);
+			return;
+		}
 
-	if (newCustomerSchema.validate(newCustomer).error !== undefined) {
-		res.sendStatus(400);
-		return;
+		const existingCpfList = await dbConnect.query("SELECT cpf FROM customers");
+		const existingCpfValues = existingCpfList.rows.map((c) => c.cpf);
+		if (existingCpfValues.includes(cpf)) {
+			res.sendStatus(409);
+			return;
+		}
+		dbConnect.query("INSERT INTO customers (name, phone, cpf, birthday) values ($1,$2,$3,$4)", [name, phone, cpf, birthday]);
+		res.sendStatus(201);
+	} catch {
+		res.sendStatus(500);
 	}
-	if (existingCpfValues.includes(cpf)) {
-		res.sendStatus(409);
-		return;
-	}
-
-	dbConnect.query("INSERT INTO customers (name, phone, cpf, birthday) values ($1,$2,$3,$4)", [name, phone, cpf, birthday]);
-	res.sendStatus(201);
 });
 
-const newCustomerSchema = joi.object({
+app.put("/customers/:id", async (req, res) => {
+	const editedCustomer = req.body;
+	const { name, phone, cpf, birthday } = editedCustomer;
+	const { id } = req.params;
+
+	try {
+		if (customerSchema.validate(editedCustomer).error !== undefined) {
+			res.sendStatus(400);
+			return;
+		}
+		await dbConnect.query("DELETE FROM customers WHERE id = $1", [id]);
+
+		const existingCpfList = await dbConnect.query("SELECT cpf FROM customers");
+		const existingCpfValues = existingCpfList.rows.map((c) => c.cpf);
+		if (existingCpfValues.includes(cpf)) {
+			res.sendStatus(409);
+			return;
+		}
+		dbConnect.query("INSERT INTO customers (name, phone, cpf, birthday) values ($1,$2,$3,$4)", [name, phone, cpf, birthday]);
+		res.sendStatus(200);
+	} catch {
+		res.sendStatus(500);
+	}
+});
+
+const customerSchema = joi.object({
 	name: joi.string().required(),
 	phone: joi.string().min(10).max(11),
 	cpf: joi.string().pattern(/^[0-9]{3}[0-9]{3}[0-9]{3}[0-9]{2}$/),
