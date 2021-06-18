@@ -214,16 +214,42 @@ app.get("/rentals", async (req, res) => {
 	const { customerId, gameId, limit, offset, order, desc, status, startDate } = req.query;
 	const [queryLimit, queryOffset, orderConfig] = paginatorQuery(limit, offset, order, desc);
 
-	let statusQuery = "";
+    function statusQuery(){
+        let statusQuery;
+        if (["open", "closed"].includes(status)) {
+            statusQuery = status === "open" ? ` rentals."returnDate" IS NULL ` : ` rentals."returnDate" IS NOT NULL `;
+        }
+        return statusQuery;
+    }
 
-	if (["open", "closed"].includes(status)) {
-		statusQuery = status === "open" ? `rentals."returnDate" IS NULL` : `rentals."returnDate" IS NOT NULL`;
-	}
+    const acceptedQueries = ["customerId","gameId","status","startDate"];
+    const existingQueries = Object.keys(req.query).filter( k => acceptedQueries.includes(k));
+    const queriesObj = {
+        customerId: ` rentals."customerId" = ${customerId} `,
+        gameId: ` rentals."gameId" = ${gameId} `,
+        status: statusQuery(),
+        startDate: ` rentals."rentDate" <= ${startDate} `
+    }
 
-	let rentalsList;
+    let configQuery = "";
+    if(existingQueries[0] !== undefined){
+        configQuery += " WHERE " + queriesObj[existingQueries[0]];
+    }
+
+    if(existingQueries.length > 1){
+        for( let i = 1; i < existingQueries.length; i++ ){
+            configQuery += "AND" + queriesObj[existingQueries[i]];
+        }
+    }
+
+
+
+    console.log(configQuery);
+
+    
+
 	try {
-		if (customerId && gameId) {
-			rentalsList = await dbConnect.query(
+	    const rentalsList = await dbConnect.query(
 				`
         SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
         FROM rentals 
@@ -232,76 +258,8 @@ app.get("/rentals", async (req, res) => {
         JOIN games
         ON rentals."gameId" = games.id
         JOIN categories
-        ON games."categoryId" = categories.id
-        WHERE rentals."customerId" = $1 AND rentals."gameId" = $2` +
-					` AND ${statusQuery}` +
-					queryLimit +
-					queryOffset +
-					orderConfig,
-				[customerId, gameId]
-			);
-		}
-
-		if (customerId && !gameId) {
-			rentalsList = await dbConnect.query(
-				`
-        SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
-        FROM rentals 
-        JOIN customers
-        ON rentals."customerId" = customers.id
-        JOIN games
-        ON rentals."gameId" = games.id
-        JOIN categories
-        ON games."categoryId" = categories.id
-        WHERE rentals."customerId" = $1
-        ` +
-					` AND ${statusQuery}` +
-					queryLimit +
-					queryOffset +
-					orderConfig,
-				[customerId]
-			);
-		}
-
-		if (!customerId && gameId) {
-			rentalsList = await dbConnect.query(
-				`
-        SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
-        FROM rentals 
-        JOIN customers
-        ON rentals."customerId" = customers.id
-        JOIN games
-        ON rentals."gameId" = games.id
-        JOIN categories
-        ON games."categoryId" = categories.id
-        WHERE rentals."gameId" = $1
-        ` +
-					` AND ${statusQuery}` +
-					queryLimit +
-					queryOffset +
-					orderConfig,
-				[gameId]
-			);
-		}
-
-		if (!customerId && !gameId) {
-			rentalsList = await dbConnect.query(
-				`
-        SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
-        FROM rentals 
-        JOIN customers
-        ON rentals."customerId" = customers.id
-        JOIN games
-        ON rentals."gameId" = games.id
-        JOIN categories
-        ON games."categoryId" = categories.id
-        ` +
-					queryLimit +
-					queryOffset +
-					orderConfig +
-					statusQuery
-			);
-		}
+        ON games."categoryId" = categories.id` + configQuery + queryLimit + queryOffset + orderConfig);
+        
 
 		const rentalsListFormated = rentalsList.rows.map((rental) => {
 			const {
