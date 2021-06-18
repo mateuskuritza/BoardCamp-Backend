@@ -118,7 +118,7 @@ app.get("/customers", async (req, res) => {
 		);
 		const customersListFormated = customersList.rows.map((c) => {
 			const formated = c;
-			formated.birthday = dayjs(formated.birthday).format("YYYY/MM/DD");
+			formated.birthday = dayjs(formated.birthday).format("YYYY-MM-DD");
 			return formated;
 		});
 		res.send(customersListFormated);
@@ -138,7 +138,8 @@ app.get("/customers/:id", async (req, res) => {
 		}
 
 		const customer = await dbConnect.query(`SELECT * FROM customers WHERE id = $1`, [id]);
-		res.send(customer.rows);
+		customer.rows[0].birthday = dayjs(customer.rows.birthday).format("YYYY-MM-DD");
+		res.send(customer.rows[0]);
 	} catch {
 		res.sendStatus(500);
 	}
@@ -279,9 +280,9 @@ app.get("/rentals", async (req, res) => {
 				id: id,
 				customerId,
 				gameId,
-				rentDate: dayjs(rentDate).format("YYYY/MM/DD"),
+				rentDate: dayjs(rentDate).format("YYYY-MM-DD"),
 				daysRented,
-				returnDate: returnDate ? dayjs(returnDate).format("YYYY/MM/DD") : returnDate,
+				returnDate: returnDate ? dayjs(returnDate).format("YYYY-MM-DD") : returnDate,
 				originalPrice,
 				delayFee,
 				customer: {
@@ -316,7 +317,7 @@ app.post("/rentals", async (req, res) => {
 		const availableGames = await dbConnect.query(`SELECT "stockTotal" FROM games WHERE id=$1`, [gameId]);
 		const availableGamesQuantity = availableGames.rows[0] !== undefined ? availableGames.rows[0].stockTotal : 0;
 
-		if (!existGameId || !existCustomer || !daysRented >= 1 || rentedGamesQuantity + 1 > availableGamesQuantity) {
+		if (!existGameId || !existCustomer || daysRented <= 0 || rentedGamesQuantity + 1 > availableGamesQuantity) {
 			res.sendStatus(400);
 			return;
 		}
