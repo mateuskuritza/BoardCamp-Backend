@@ -5,11 +5,11 @@ import app from "./serverConfig.js";
 
 // Categories routes start
 app.get("/categories", async (req, res) => {
-	const { limit, offset } = req.query;
-	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
+	const { limit, offset, order, desc } = req.query;
+	const [queryLimit, queryOffset, orderConfig] = paginatorQuery(limit, offset, order, desc);
 
 	try {
-		const result = await dbConnect.query("SELECT * FROM categories" + queryLimit + queryOffset);
+		const result = await dbConnect.query("SELECT * FROM categories" + queryLimit + queryOffset + orderConfig);
 		res.send(result.rows);
 	} catch {
 		res.sendStatus(500);
@@ -42,10 +42,10 @@ app.post("/categories", async (req, res) => {
 
 // Games routes start
 app.get("/games", async (req, res) => {
-	const { name, limit, offset } = req.query;
+	const { name, limit, offset, order, desc } = req.query;
 	const queryConfig = name ? `%${name}%` : "%";
 
-	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
+	const [queryLimit, queryOffset, orderConfig] = paginatorQuery(limit, offset, order, desc);
 	try {
 		const result = await dbConnect.query(
 			`
@@ -54,7 +54,8 @@ app.get("/games", async (req, res) => {
         ON games."categoryId" = categories.id
         WHERE games.name iLIKE $1` +
 				queryLimit +
-				queryOffset,
+				queryOffset +
+				orderConfig,
 			[queryConfig]
 		);
 		res.send(result.rows);
@@ -106,14 +107,15 @@ const newGameSchema = joi.object({
 
 // Customers routes start
 app.get("/customers", async (req, res) => {
-	const { cpf, limit, offset } = req.query;
+	const { cpf, limit, offset, order, desc } = req.query;
 	const queryCpf = cpf ? `${cpf}%` : "%";
-	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
+	const [queryLimit, queryOffset, orderConfig] = paginatorQuery(limit, offset, order, desc);
 
 	try {
-		const customersList = await dbConnect.query(`SELECT * FROM customers WHERE cpf LIKE $1` + queryLimit + queryOffset, [
-			queryCpf,
-		]);
+		const customersList = await dbConnect.query(
+			`SELECT * FROM customers WHERE cpf LIKE $1` + queryLimit + queryOffset + orderConfig,
+			[queryCpf]
+		);
 		const customersListFormated = customersList.rows.map((c) => {
 			const formated = c;
 			formated.birthday = dayjs(formated.birthday).format("YYYY/MM/DD");
@@ -209,8 +211,8 @@ const customerSchema = joi.object({
 
 // Rentals routes start
 app.get("/rentals", async (req, res) => {
-	const { customerId, gameId, limit, offset } = req.query;
-	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
+	const { customerId, gameId, limit, offset, order, desc } = req.query;
+	const [queryLimit, queryOffset, orderConfig] = paginatorQuery(limit, offset, order, desc);
 
 	let rentalsList;
 	try {
@@ -228,7 +230,8 @@ app.get("/rentals", async (req, res) => {
         WHERE rentals."customerId" = $1 AND rentals."gameId" = $2
         ` +
 					queryLimit +
-					queryOffset,
+					queryOffset +
+					orderConfig,
 				[customerId, gameId]
 			);
 		}
@@ -247,7 +250,8 @@ app.get("/rentals", async (req, res) => {
         WHERE rentals."customerId" = $1
         ` +
 					queryLimit +
-					queryOffset,
+					queryOffset +
+					orderConfig,
 				[customerId]
 			);
 		}
@@ -266,7 +270,8 @@ app.get("/rentals", async (req, res) => {
         WHERE rentals."gameId" = $1
         ` +
 					queryLimit +
-					queryOffset,
+					queryOffset +
+					orderConfig,
 				[gameId]
 			);
 		}
@@ -284,7 +289,8 @@ app.get("/rentals", async (req, res) => {
         ON games."categoryId" = categories.id
         ` +
 					queryLimit +
-					queryOffset
+					queryOffset +
+					orderConfig
 			);
 		}
 
@@ -416,12 +422,14 @@ app.delete("/rentals/:id", async (req, res) => {
 // Rentals end
 //  fuser -k -n tcp 4000
 
-function paginatorQuery(limit, offset) {
+function paginatorQuery(limit, offset, order, desc, columns) {
 	const newLimit = !isNaN(limit) ? limit : null;
 	const newOffset = !isNaN(offset) ? offset : null;
+	//const newOrder = columns.includes(order) ? order : false;
 
-	const queryLimit = newLimit ? ` LIMIT ${limit}` : "";
-	const queryOffset = newOffset ? ` OFFSET ${offset} ROWS` : "";
+	const queryLimit = newLimit ? ` LIMIT ${newLimit}` : "";
+	const queryOffset = newOffset ? ` OFFSET ${newOffset} ROWS` : "";
+	const orderConfig = order ? (desc ? ` ORDER BY "${order}" DESC` : ` ORDER BY "${order}" ASC`) : "";
 
-	return [queryLimit, queryOffset];
+	return [queryLimit, queryOffset, orderConfig];
 }
