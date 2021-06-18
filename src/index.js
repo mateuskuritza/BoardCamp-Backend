@@ -5,8 +5,11 @@ import app from "./serverConfig.js";
 
 // Categories routes start
 app.get("/categories", async (req, res) => {
+	const { limit, offset } = req.query;
+	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
+
 	try {
-		const result = await dbConnect.query("SELECT * FROM categories");
+		const result = await dbConnect.query("SELECT * FROM categories" + queryLimit + queryOffset);
 		res.send(result.rows);
 	} catch {
 		res.sendStatus(500);
@@ -39,15 +42,19 @@ app.post("/categories", async (req, res) => {
 
 // Games routes start
 app.get("/games", async (req, res) => {
-	const { name } = req.query;
+	const { name, limit, offset } = req.query;
 	const queryConfig = name ? `%${name}%` : "%";
+
+	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
 	try {
 		const result = await dbConnect.query(
 			`
         SELECT games.*, categories.name AS "categoryName" 
         FROM games JOIN categories
         ON games."categoryId" = categories.id
-        WHERE games.name iLIKE $1`,
+        WHERE games.name iLIKE $1` +
+				queryLimit +
+				queryOffset,
 			[queryConfig]
 		);
 		res.send(result.rows);
@@ -99,10 +106,14 @@ const newGameSchema = joi.object({
 
 // Customers routes start
 app.get("/customers", async (req, res) => {
-	const { cpf } = req.query;
-	const queryConfig = cpf ? `${cpf}%` : "%";
+	const { cpf, limit, offset } = req.query;
+	const queryCpf = cpf ? `${cpf}%` : "%";
+	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
+
 	try {
-		const customersList = await dbConnect.query(`SELECT * FROM customers WHERE cpf LIKE $1`, [queryConfig]);
+		const customersList = await dbConnect.query(`SELECT * FROM customers WHERE cpf LIKE $1` + queryLimit + queryOffset, [
+			queryCpf,
+		]);
 		const customersListFormated = customersList.rows.map((c) => {
 			const formated = c;
 			formated.birthday = dayjs(formated.birthday).format("YYYY/MM/DD");
@@ -192,13 +203,15 @@ const customerSchema = joi.object({
 	name: joi.string().required(),
 	phone: joi.string().min(10).max(11),
 	cpf: joi.string().pattern(/^[0-9]{3}[0-9]{3}[0-9]{3}[0-9]{2}$/),
-	birthday: joi.date().required(),
+	birthday: joi.date().less("now").required(),
 });
 // Customers end
 
 // Rentals routes start
 app.get("/rentals", async (req, res) => {
-	const { customerId, gameId } = req.query;
+	const { customerId, gameId, limit, offset } = req.query;
+	const [queryLimit, queryOffset] = paginatorQuery(limit, offset);
+
 	let rentalsList;
 	try {
 		if (customerId && gameId) {
@@ -213,7 +226,9 @@ app.get("/rentals", async (req, res) => {
         JOIN categories
         ON games."categoryId" = categories.id
         WHERE rentals."customerId" = $1 AND rentals."gameId" = $2
-        `,
+        ` +
+					queryLimit +
+					queryOffset,
 				[customerId, gameId]
 			);
 		}
@@ -230,7 +245,9 @@ app.get("/rentals", async (req, res) => {
         JOIN categories
         ON games."categoryId" = categories.id
         WHERE rentals."customerId" = $1
-        `,
+        ` +
+					queryLimit +
+					queryOffset,
 				[customerId]
 			);
 		}
@@ -247,7 +264,9 @@ app.get("/rentals", async (req, res) => {
         JOIN categories
         ON games."categoryId" = categories.id
         WHERE rentals."gameId" = $1
-        `,
+        ` +
+					queryLimit +
+					queryOffset,
 				[gameId]
 			);
 		}
@@ -263,7 +282,9 @@ app.get("/rentals", async (req, res) => {
         ON rentals."gameId" = games.id
         JOIN categories
         ON games."categoryId" = categories.id
-        `
+        ` +
+					queryLimit +
+					queryOffset
 			);
 		}
 
@@ -394,3 +415,13 @@ app.delete("/rentals/:id", async (req, res) => {
 
 // Rentals end
 //  fuser -k -n tcp 4000
+
+function paginatorQuery(limit, offset) {
+	const newLimit = !isNaN(limit) ? limit : null;
+	const newOffset = !isNaN(offset) ? offset : null;
+
+	const queryLimit = newLimit ? ` LIMIT ${limit}` : "";
+	const queryOffset = newOffset ? ` OFFSET ${offset} ROWS` : "";
+
+	return [queryLimit, queryOffset];
+}
