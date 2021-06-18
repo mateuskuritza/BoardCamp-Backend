@@ -211,8 +211,14 @@ const customerSchema = joi.object({
 
 // Rentals routes start
 app.get("/rentals", async (req, res) => {
-	const { customerId, gameId, limit, offset, order, desc } = req.query;
+	const { customerId, gameId, limit, offset, order, desc, status, startDate } = req.query;
 	const [queryLimit, queryOffset, orderConfig] = paginatorQuery(limit, offset, order, desc);
+
+	let statusQuery = "";
+
+	if (["open", "closed"].includes(status)) {
+		statusQuery = status === "open" ? `rentals."returnDate" IS NULL` : `rentals."returnDate" IS NOT NULL`;
+	}
 
 	let rentalsList;
 	try {
@@ -227,8 +233,8 @@ app.get("/rentals", async (req, res) => {
         ON rentals."gameId" = games.id
         JOIN categories
         ON games."categoryId" = categories.id
-        WHERE rentals."customerId" = $1 AND rentals."gameId" = $2
-        ` +
+        WHERE rentals."customerId" = $1 AND rentals."gameId" = $2` +
+					` AND ${statusQuery}` +
 					queryLimit +
 					queryOffset +
 					orderConfig,
@@ -249,6 +255,7 @@ app.get("/rentals", async (req, res) => {
         ON games."categoryId" = categories.id
         WHERE rentals."customerId" = $1
         ` +
+					` AND ${statusQuery}` +
 					queryLimit +
 					queryOffset +
 					orderConfig,
@@ -269,6 +276,7 @@ app.get("/rentals", async (req, res) => {
         ON games."categoryId" = categories.id
         WHERE rentals."gameId" = $1
         ` +
+					` AND ${statusQuery}` +
 					queryLimit +
 					queryOffset +
 					orderConfig,
@@ -290,7 +298,8 @@ app.get("/rentals", async (req, res) => {
         ` +
 					queryLimit +
 					queryOffset +
-					orderConfig
+					orderConfig +
+					statusQuery
 			);
 		}
 
