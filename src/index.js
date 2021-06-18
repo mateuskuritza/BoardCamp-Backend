@@ -214,43 +214,37 @@ app.get("/rentals", async (req, res) => {
 	const { customerId, gameId, limit, offset, order, desc, status, startDate } = req.query;
 	const [queryLimit, queryOffset, orderConfig] = paginatorQuery(limit, offset, order, desc);
 
-    function statusQuery(){
-        let statusQuery;
-        if (["open", "closed"].includes(status)) {
-            statusQuery = status === "open" ? ` rentals."returnDate" IS NULL ` : ` rentals."returnDate" IS NOT NULL `;
-        }
-        return statusQuery;
-    }
+	function statusQuery() {
+		let statusQuery;
+		if (["open", "closed"].includes(status)) {
+			statusQuery = status === "open" ? ` rentals."returnDate" IS NULL ` : ` rentals."returnDate" IS NOT NULL `;
+		}
+		return statusQuery;
+	}
 
-    const acceptedQueries = ["customerId","gameId","status","startDate"];
-    const existingQueries = Object.keys(req.query).filter( k => acceptedQueries.includes(k));
-    const queriesObj = {
-        customerId: ` rentals."customerId" = ${customerId} `,
-        gameId: ` rentals."gameId" = ${gameId} `,
-        status: statusQuery(),
-        startDate: ` rentals."rentDate" <= ${startDate} `
-    }
+	const acceptedQueries = ["customerId", "gameId", "status", "startDate"];
+	const existingQueries = Object.keys(req.query).filter((k) => acceptedQueries.includes(k));
+	const queriesObj = {
+		customerId: ` rentals."customerId" = ${customerId} `,
+		gameId: ` rentals."gameId" = ${gameId} `,
+		status: statusQuery(),
+		startDate: ` rentals."rentDate" <= ${startDate} `,
+	};
 
-    let configQuery = "";
-    if(existingQueries[0] !== undefined){
-        configQuery += " WHERE " + queriesObj[existingQueries[0]];
-    }
+	let configQuery = "";
+	if (existingQueries[0] !== undefined) {
+		configQuery += " WHERE " + queriesObj[existingQueries[0]];
+	}
 
-    if(existingQueries.length > 1){
-        for( let i = 1; i < existingQueries.length; i++ ){
-            configQuery += "AND" + queriesObj[existingQueries[i]];
-        }
-    }
-
-
-
-    console.log(configQuery);
-
-    
+	if (existingQueries.length > 1) {
+		for (let i = 1; i < existingQueries.length; i++) {
+			configQuery += "AND" + queriesObj[existingQueries[i]];
+		}
+	}
 
 	try {
-	    const rentalsList = await dbConnect.query(
-				`
+		const rentalsList = await dbConnect.query(
+			`
         SELECT rentals.*, customers.name AS "customerName", games.name AS "gameName", games."categoryId", categories.name AS "categoryName"
         FROM rentals 
         JOIN customers
@@ -258,8 +252,12 @@ app.get("/rentals", async (req, res) => {
         JOIN games
         ON rentals."gameId" = games.id
         JOIN categories
-        ON games."categoryId" = categories.id` + configQuery + queryLimit + queryOffset + orderConfig);
-        
+        ON games."categoryId" = categories.id` +
+				configQuery +
+				queryLimit +
+				queryOffset +
+				orderConfig
+		);
 
 		const rentalsListFormated = rentalsList.rows.map((rental) => {
 			const {
@@ -386,13 +384,38 @@ app.delete("/rentals/:id", async (req, res) => {
 	}
 });
 
+app.get("/rentals/metrics", async (req, res) => {
+	try {
+		const revenue = await dbConnect.query(`
+        SELECT 
+        (SUM("originalPrice") + SUM("delayFee")) as revenue
+        FROM rentals
+        `);
+		const rentals = await dbConnect.query(`
+        SELECT
+        COUNT(id) as rentals
+        FROM rentals
+        `);
+
+		const average = (revenue.rows[0].revenue / rentals.rows[0].rentals).toFixed(2);
+		const response = {
+			revenue: revenue.rows[0].revenue,
+			rentals: rentals.rows[0].rentals,
+			average,
+		};
+
+		res.send(response);
+	} catch {
+		res.sendStatus(500);
+	}
+});
+
 // Rentals end
 //  fuser -k -n tcp 4000
 
-function paginatorQuery(limit, offset, order, desc, columns) {
+function paginatorQuery(limit, offset, order, desc) {
 	const newLimit = !isNaN(limit) ? limit : null;
 	const newOffset = !isNaN(offset) ? offset : null;
-	//const newOrder = columns.includes(order) ? order : false;
 
 	const queryLimit = newLimit ? ` LIMIT ${newLimit}` : "";
 	const queryOffset = newOffset ? ` OFFSET ${newOffset} ROWS` : "";
